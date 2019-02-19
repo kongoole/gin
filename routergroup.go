@@ -39,7 +39,7 @@ type IRoutes interface {
 // RouterGroup is used internally to configure router, a RouterGroup is associated with
 // a prefix and an array of handlers (middleware).
 type RouterGroup struct {
-	Handlers HandlersChain
+	Handlers HandlersChain // middleware数组
 	basePath string
 	engine   *Engine
 	root     bool
@@ -48,7 +48,7 @@ type RouterGroup struct {
 var _ IRouter = &RouterGroup{}
 
 // Use adds middleware to the group, see example code in GitHub.
-func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes {
+func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes { // 使用一个/多个middleware
 	group.Handlers = append(group.Handlers, middleware...)
 	return group.returnObj()
 }
@@ -204,7 +204,7 @@ func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileS
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	}
 }
-
+// 整合自有Handlers+新增handlers，返回
 func (group *RouterGroup) combineHandlers(handlers HandlersChain) HandlersChain {
 	finalSize := len(group.Handlers) + len(handlers)
 	if finalSize >= int(abortIndex) {

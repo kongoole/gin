@@ -27,7 +27,7 @@ var (
 type HandlerFunc func(*Context)
 
 // HandlersChain defines a HandlerFunc array.
-type HandlersChain []HandlerFunc
+type HandlersChain []HandlerFunc // HandlerFunc类型方法数组
 
 // Last returns the last handler in the chain. ie. the last handler is the main own.
 func (c HandlersChain) Last() HandlerFunc {
@@ -51,6 +51,8 @@ type RoutesInfo []RouteInfo
 // Engine is the framework's instance, it contains the muxer, middleware and configuration settings.
 // Create an instance of Engine, by using New() or Default()
 type Engine struct {
+	// 嵌入使Engine也实现了IRoutes接口
+	// 路由定义保存在这里？
 	RouterGroup
 
 	// Enables automatic redirection if the current route can't be matched but a
@@ -100,11 +102,11 @@ type Engine struct {
 	secureJsonPrefix string
 	HTMLRender       render.HTMLRender
 	FuncMap          template.FuncMap
-	allNoRoute       HandlersChain
-	allNoMethod      HandlersChain
-	noRoute          HandlersChain
-	noMethod         HandlersChain
-	pool             sync.Pool
+	allNoRoute       HandlersChain // 404特定middleware+全局middleware
+	allNoMethod      HandlersChain // 405特定middleware+全局middleware
+	noRoute          HandlersChain // 404访问不存在的路由时执行此方法列表
+	noMethod         HandlersChain // 405以不支持方法访问路由时执行此方法列表
+	pool             sync.Pool // 被并发使用的临时、共享、可复用的Context对象(指针)列表
 	trees            methodTrees
 }
 
@@ -119,8 +121,8 @@ var _ IRouter = &Engine{}
 // - UseRawPath:             false
 // - UnescapePathValues:     true
 func New() *Engine {
-	debugPrintWARNINGNew()
-	engine := &Engine{
+	debugPrintWARNINGNew() // 当调用New()时打印此信息
+	engine := &Engine{     // 获取一个Engine类型的指针
 		RouterGroup: RouterGroup{
 			Handlers: nil,
 			basePath: "/",
@@ -159,7 +161,7 @@ func (engine *Engine) allocateContext() *Context {
 }
 
 // Delims sets template left and right delims and returns a Engine instance.
-func (engine *Engine) Delims(left, right string) *Engine {
+func (engine *Engine) Delims(left, right string) *Engine { // 设置模板渲染分隔符
 	engine.delims = render.Delims{Left: left, Right: right}
 	return engine
 }
@@ -227,7 +229,7 @@ func (engine *Engine) NoMethod(handlers ...HandlerFunc) {
 // Use attachs a global middleware to the router. ie. the middleware attached though Use() will be
 // included in the handlers chain for every single request. Even 404, 405, static files...
 // For example, this is the right place for a logger or error management middleware.
-func (engine *Engine) Use(middleware ...HandlerFunc) IRoutes {
+func (engine *Engine) Use(middleware ...HandlerFunc) IRoutes { // 使用一个/多个middleware
 	engine.RouterGroup.Use(middleware...)
 	engine.rebuild404Handlers()
 	engine.rebuild405Handlers()
@@ -341,6 +343,8 @@ func (engine *Engine) RunFd(fd int) (err error) {
 
 // ServeHTTP conforms to the http.Handler interface.
 func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// 从对象池获取一个对象，获取到就从对象池删除
+	// 获取不到就尝试调用engine.pool.New()
 	c := engine.pool.Get().(*Context)
 	c.writermem.reset(w)
 	c.Request = req
@@ -348,18 +352,15 @@ func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	engine.handleHTTPRequest(c)
 
-	engine.pool.Put(c)
+	engine.pool.Put(c) // 把获取到的再放入对象池
 }
 
 // HandleContext re-enter a context that has been rewritten.
 // This can be done by setting c.Request.URL.Path to your new target.
 // Disclaimer: You can loop yourself to death with this, use wisely.
 func (engine *Engine) HandleContext(c *Context) {
-	oldIndexValue := c.index
 	c.reset()
 	engine.handleHTTPRequest(c)
-
-	c.index = oldIndexValue
 }
 
 func (engine *Engine) handleHTTPRequest(c *Context) {

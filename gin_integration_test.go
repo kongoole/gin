@@ -188,12 +188,15 @@ func TestConcurrentHandleContext(t *testing.T) {
 	})
 	router.GET("/example", func(c *Context) { c.String(http.StatusOK, "it worked") })
 
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
 	var wg sync.WaitGroup
 	iterations := 200
 	wg.Add(iterations)
 	for i := 0; i < iterations; i++ {
 		go func() {
-			testGetRequestHandler(t, router, "/")
+			testRequest(t, ts.URL+"/")
 			wg.Done()
 		}()
 	}
@@ -214,14 +217,3 @@ func TestConcurrentHandleContext(t *testing.T) {
 
 // 	testRequest(t, "http://localhost:8033/example")
 // }
-
-func testGetRequestHandler(t *testing.T, h http.Handler, url string) {
-	req, err := http.NewRequest("GET", url, nil)
-	assert.NoError(t, err)
-
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
-
-	assert.Equal(t, "it worked", w.Body.String(), "resp body should match")
-	assert.Equal(t, 200, w.Code, "should get a 200")
-}
