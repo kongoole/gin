@@ -39,27 +39,28 @@ type IRoutes interface {
 // RouterGroup is used internally to configure router, a RouterGroup is associated with
 // a prefix and an array of handlers (middleware).
 type RouterGroup struct {
-	Handlers HandlersChain
+	Handlers HandlersChain // middleware数组，该路由组内的路由都要经过此数组中的handlers处理
 	basePath string
-	engine   *Engine
+	engine   *Engine // 路由组所属的框架实例
 	root     bool
 }
 
 var _ IRouter = &RouterGroup{}
 
 // Use adds middleware to the group, see example code in GitHub.
-func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes {
+func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes { // 使用一个/多个middleware
 	group.Handlers = append(group.Handlers, middleware...)
 	return group.returnObj()
 }
 
+// 创建一组路由，有相同前缀或者相同middleware
 // Group creates a new router group. You should add all the routes that have common middlewares or the same path prefix.
 // For example, all the routes that use a common middleware for authorization could be grouped.
 func (group *RouterGroup) Group(relativePath string, handlers ...HandlerFunc) *RouterGroup {
 	return &RouterGroup{
 		Handlers: group.combineHandlers(handlers),
 		basePath: group.calculateAbsolutePath(relativePath),
-		engine:   group.engine,
+		engine:   group.engine, // 新路由组和原路由组持有相同框架实例
 	}
 }
 
@@ -69,9 +70,10 @@ func (group *RouterGroup) BasePath() string {
 	return group.basePath
 }
 
+// 注册路由处理Handlers
 func (group *RouterGroup) handle(httpMethod, relativePath string, handlers HandlersChain) IRoutes {
-	absolutePath := group.calculateAbsolutePath(relativePath)
-	handlers = group.combineHandlers(handlers)
+	absolutePath := group.calculateAbsolutePath(relativePath) // 连接路由组basePath+路由relativePath
+	handlers = group.combineHandlers(handlers) // 自定义handlers+middlewares
 	group.engine.addRoute(httpMethod, absolutePath, handlers)
 	return group.returnObj()
 }
@@ -205,6 +207,7 @@ func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileS
 	}
 }
 
+// 整合自有Handlers+新增handlers，返回
 func (group *RouterGroup) combineHandlers(handlers HandlersChain) HandlersChain {
 	finalSize := len(group.Handlers) + len(handlers)
 	if finalSize >= int(abortIndex) {
